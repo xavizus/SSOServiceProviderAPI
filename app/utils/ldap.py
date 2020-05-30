@@ -1,6 +1,7 @@
 from ldap3 import Server, Connection, ALL, NTLM, Tls
 from ldap3.core.exceptions import LDAPUnknownAuthenticationMethodError,\
     LDAPSocketOpenError, LDAPSSLConfigurationError
+from ldap3.utils import conv
 from app.utils.exceptions import FLASKLDAPMissingConfigurationError
 import ssl
 
@@ -96,10 +97,11 @@ class Flask_LDAP(object):
             return authenticated
 
     def getUserGroups(self, username):
+        escapedUsername = conv.escape_filter_chars(username, encoding=None)
         connection = Connection(auto_bind=True)
         connection.search(
             self.ldapOU,
-            f'(&(sAMAccountName={username}))',
+            f'(&(sAMAccountName={escapedUsername}))',
             attributes=['memberOf']
         )
         entry = connection.entries
