@@ -1,10 +1,10 @@
 {
-    "python.pythonPath": "d:\\Programmering\\Python\\SSOServiceProviderAPI\\env\\Scripts\\python.exe",
-    "python.testing.cwd": "${workspaceFolder}\\tests",
+    "python.pythonPath": "env\\Scripts\\python.exe",
+    "python.testing.cwd": "${workspaceFolder}",
     "python.testing.unittestArgs": [
         "-v",
         "-s",
-        "./",
+        "./tests",
         "-p",
         "*_test.py"
     ],
@@ -17,4 +17,5 @@
         "--load-plugins",
         "pylint-flask"
     ],
+    "python.linting.flake8Enabled": true
 }

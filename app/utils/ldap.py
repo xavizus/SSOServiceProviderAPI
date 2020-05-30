@@ -1,7 +1,9 @@
-from flask import current_app
-from ldap3 import Server, Connection, ALL, NTLM, ALL_ATTRIBUTES, Tls
-from ldap3.core.exceptions import LDAPCursorError, LDAPUnknownAuthenticationMethodError, LDAPSocketOpenError
+from ldap3 import Server, Connection, ALL, NTLM, Tls
+from ldap3.core.exceptions import LDAPUnknownAuthenticationMethodError,\
+    LDAPSocketOpenError, LDAPSSLConfigurationError
+from app.utils.exceptions import FLASKLDAPMissingConfigurationError
 import ssl
+
 
 class Flask_LDAP(object):
     ldapProviderUrl = None
@@ -10,32 +12,78 @@ class Flask_LDAP(object):
     ldapSSL = None
 
     server = None
-    port = 389
+    port = None
+
+    tls_configuration = None
 
     def __init__(self, app=None):
         if app is not None:
             self.initApp(app)
 
     def initApp(self, app):
-        self.ldapProviderUrl = app.config.get('LDAP_PROVIDER_URL')
-        self.ldapDomain = app.config.get('DOMAIN')
-        self.ldapOU = app.config.get('DOMAIN_OU')
-        self.ldapSSL = app.config.get('LDAP_SSL')
-        self.port = app.config.get('LDAP_PORT')
-        
-        tls_configuration = None
-        
-        if(self.ldapSSL):
-            tls_configuration = Tls(validate=ssl.CERT_REQUIRED, version=ssl.PROTOCOL_TLSv1)
+        requiredConfigs = {
+            'ldapProviderUrl': 'LDAP_PROVIDER_URL',
+            'ldapDomain': 'DOMAIN',
+            'ldapOU': 'DOMAIN_OU',
+            'ldapSSL': 'LDAP_SSL',
+            'port': 'LDAP_PORT',
+            'username': 'LDAP_USER',
+            'password': 'LDAP_PASSWORD'
+        }
 
-        self.server = Server(self.ldapProviderUrl, port=self.port, use_ssl=self.ldapSSL, get_info=ALL, tls=tls_configuration)
+        missingProperties = []
+        for ldapProperty, configVariable in requiredConfigs.items():
+            setattr(self, ldapProperty, app.config.get(configVariable))
+            if getattr(self, ldapProperty) is None:
+                missingProperties.append(configVariable)
+
+        if len(missingProperties) != 0:
+            stringMissingProperties = ', '.join(missingProperties)
+            raise FLASKLDAPMissingConfigurationError(
+                f"LDAP missing following properties: {stringMissingProperties}"
+            )
+
+        if(self.ldapSSL):
+            self.tls_configuration = Tls(
+                validate=ssl.CERT_REQUIRED,
+                ca_certs_file=app.config.get('LDAP_CA_CERT_PATH'),
+                version=ssl.PROTOCOL_TLSv1
+            )
+
+        try:
+            self.server = Server(
+                self.ldapProviderUrl,
+                port=self.port,
+                use_ssl=self.ldapSSL,
+                get_info=ALL,
+                tls=self.tls_configuration
+            )
+
+            connection = self.connection(self.username, self.password, True)
+            connection.unbind()
+        except LDAPSocketOpenError as error:
+            raise Exception(error)
+        except LDAPSSLConfigurationError as error:
+            raise Exception(error)
 
         app.__setattr__("ldap", self)
 
+    def connection(self, username=None, password=None, auto_bind=False):
+        if any(element is None for element in [username, password]):
+            username = self.username
+            password = self.password
+        return Connection(
+            self.server,
+            user=f"{self.ldapDomain}\\{username}",
+            password=password,
+            authentication=NTLM,
+            auto_bind=False
+        )
+
     def authenticateUser(self, username, password):
         authenticated = False
-        try: 
-            connection = Connection(self.server, user=f"{self.ldapDomain}\\{username}", password=password, authentication=NTLM)
+        try:
+            connection = self.connection(username, password)
             connection.bind()
             if connection.extend.standard.who_am_i():
                 authenticated = True
@@ -44,19 +92,27 @@ class Flask_LDAP(object):
         except LDAPSocketOpenError:
             pass
         finally:
+            connection.unbind()
             return authenticated
-        
 
-    def random():
-        connection.search(app.config.get('DOMAIN_OU'),'(&(sAMAccountName={}))'.format(app.config.get('DOMAIN_USER')), attributes=['memberOf'])
+    def getUserGroups(self, username):
+        connection = Connection(auto_bind=True)
+        connection.search(
+            self.ldapOU,
+            f'(&(sAMAccountName={username}))',
+            attributes=['memberOf']
+        )
         entry = connection.entries
-        
+
         groups = []
         for group in entry[0]['memberOf']:
-            
-            connection.search(group, '(objectClass=group)', attributes=['sAMAccountName'])
+
+            connection.search(
+                group, '(objectClass=group)',
+                attributes=['sAMAccountName']
+            )
             groups.append(connection.entries[0]['sAMAccountName'])
-        
+
         if 'Administrators' in groups:
             print("Is Admin")
         connection.unbind()
