@@ -1,12 +1,12 @@
-from ldap3 import Server, Connection, ALL, NTLM, Tls
+from app.utils.abstractConnector import abstractConnector
+from ldap3 import Server, Connection, ALL, NTLM, ALL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPUnknownAuthenticationMethodError,\
     LDAPSocketOpenError, LDAPSSLConfigurationError
 from ldap3.utils import conv
 from app.utils.exceptions import FLASKLDAPMissingConfigurationError
-import ssl
 
 
-class Flask_LDAP(object):
+class Flask_LDAP(abstractConnector):
     ldapProviderUrl = None
     ldapDomain = None
     ldapOU = None
@@ -45,6 +45,8 @@ class Flask_LDAP(object):
             )
 
         if(self.ldapSSL):
+            import ssl
+            from ldap3 import Tls
             self.tls_configuration = Tls(
                 validate=ssl.CERT_REQUIRED,
                 ca_certs_file=app.config.get('LDAP_CA_CERT_PATH'),
@@ -78,7 +80,7 @@ class Flask_LDAP(object):
             user=f"{self.ldapDomain}\\{username}",
             password=password,
             authentication=NTLM,
-            auto_bind=False
+            auto_bind=auto_bind
         )
 
     def authenticateUser(self, username, password):
@@ -98,23 +100,63 @@ class Flask_LDAP(object):
 
     def getUserGroups(self, username):
         escapedUsername = conv.escape_filter_chars(username, encoding=None)
-        connection = Connection(auto_bind=True)
+        connection = self.connection(auto_bind=True)
         connection.search(
             self.ldapOU,
             f'(&(sAMAccountName={escapedUsername}))',
-            attributes=['memberOf']
+            attributes=['distinguishedName']
         )
         entry = connection.entries
 
+        if not entry:
+            return False
+
         groups = []
-        for group in entry[0]['memberOf']:
-
-            connection.search(
-                group, '(objectClass=group)',
-                attributes=['sAMAccountName']
-            )
-            groups.append(connection.entries[0]['sAMAccountName'])
-
-        if 'Administrators' in groups:
-            print("Is Admin")
+        connection.search(
+            self.ldapOU, f'(member:1.2.840.113556.1.4.1941:={entry[0]["distinguishedName"]})',
+            attributes=[ALL_ATTRIBUTES]
+        )
+        for entry in connection.entries:
+            groups.append(entry['sAMAccountName'].value)
         connection.unbind()
+        return groups if groups else False
+
+    def createUser(self, username, password, options):
+        connection = self.connection(auto_bind=True)
+        connection.add(options['distinguishedName'], attributes=options)
+        result = connection.result
+        if result['result'] != 0:
+            raise Exception(
+                f"Could not create user. Reason: { result['description'] }"
+            )
+        # Result on creation:
+        # {'result': 0, 'description': 'success', 'dn': '',
+        #  'message': '', 'referrals': None, 'type': 'addResponse'}
+        # Todo: Need to unlock theaccount, add password.
+        connection.extend.microsoft.unlock_account(options['distinguishedName'])
+        print(connection.result)
+        connection.extend.microsoft.modify_password(options['distinguishedName'], new_password=password, )
+        print(connection.result)
+        connection.unbind()
+
+    def deleteUser(self, username):
+        raise NotImplementedError('Subclass must override deleteUser method')
+
+    def addUserToGroups(self, username, groups):
+        raise NotImplementedError(
+            'Subclass must override addUserToGroups method'
+        )
+
+    def removeUserFromGroups(self, username, groups):
+        raise NotImplementedError(
+            'Subclass must override removeUserFromGroups method'
+        )
+
+    def resetPassword(self, username, password):
+        raise NotImplementedError('Subclass must override resetPassword method')
+
+    def createGroup(self, groupName, options=None):
+        raise NotImplementedError('Subclass must override createGroup method')
+
+    def deleteGroup(self, groupName, options=None):
+        raise NotImplementedError('Subclass must override deleteGroup method')

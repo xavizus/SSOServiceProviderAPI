@@ -10,5 +10,4 @@ def createApp():
     app.config.from_object(config)
 
     Flask_LDAP(app)
-
     return app
