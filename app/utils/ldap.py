@@ -121,23 +121,62 @@ class Flask_LDAP(abstractConnector):
         connection.unbind()
         return groups if groups else False
 
-    def createUser(self, username, password, options):
+    def createUser(
+        self,
+        username,
+        password,
+        firstname,
+        lastname,
+        email,
+        distinguishedName=None,
+        description="Created by SSO"
+    ):
+        if not distinguishedName:
+            pass
+        options = {
+            "objectClass": 'User',
+            'sn': "Surename",
+            'description': 'Created by SSO',
+            'displayName': 'Surename givenName',
+            'givenName': 'givenName',
+            'sAMAccountName': 'username',
+            'mail': 'mail',
+            'distinguishedName': 'CN=userName,OU=Unpersonal Account,OU=AD-Users,OU=Users,' + self.app.config['DOMAIN_OU'],
+            'userAccountControl': 512  # https://support.microsoft.com/sv-se/help/305144/how-to-use-useraccountcontrol-to-manipulate-user-account-properties
+        }
         connection = self.connection(auto_bind=True)
         connection.add(options['distinguishedName'], attributes=options)
-        result = connection.result
-        if result['result'] != 0:
+        userResult = connection.result
+        if userResult['result'] != 0:
             raise Exception(
-                f"Could not create user. Reason: { result['description'] }"
+                f"Could not create user. Reason: { userResult['description'] }"
             )
         # Result on creation:
         # {'result': 0, 'description': 'success', 'dn': '',
         #  'message': '', 'referrals': None, 'type': 'addResponse'}
         # Todo: Need to unlock theaccount, add password.
-        connection.extend.microsoft.unlock_account(options['distinguishedName'])
-        print(connection.result)
-        connection.extend.microsoft.modify_password(options['distinguishedName'], new_password=password, )
-        print(connection.result)
+        unlockResult = connection.extend.microsoft.unlock_account(options['distinguishedName'])
+        if unlockResult['result'] != 0:
+            raise Exception(
+                f"Could not unlock user. Reason: { unlockResult['description']}"
+            )
+
+        passwordResult = connection.extend.microsoft.modify_password(options['distinguishedName'], new_password=password)
+        if passwordResult['result'] != 0:
+            raise Exception(
+                f"Could not reset password. Reason: { passwordResult['description']}"
+            )
         connection.unbind()
+
+    def _createObject(self, object):
+        connection = self.connection(auto_bind=True)
+        connection.add(object['distinguishedName'], attributes=object)
+
+        creationResult = connection.result
+        if creationResult['result'] != 0:
+            raise Exception(
+                f"Could not create user. Reason: { creationResult['description'] }"
+            )
 
     def deleteUser(self, username):
         raise NotImplementedError('Subclass must override deleteUser method')

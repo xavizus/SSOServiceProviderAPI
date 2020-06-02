@@ -46,17 +46,6 @@ class LDAPtest(unittest.TestCase):
         self.assertFalse(groups)
 
     def testCreateUser(self):
-        options = {
-            "objectClass": 'User',
-            'sn': "Surename",
-            'description': 'Created by SSO',
-            'displayName': 'Surename givenName',
-            'givenName': 'givenName',
-            'sAMAccountName': 'username',
-            'mail': 'mail',
-            'distinguishedName': 'CN=userName,OU=Unpersonal Account,OU=AD-Users,OU=Users,' + self.app.config['DOMAIN_OU'],
-            'userAccountControl': 512  # https://support.microsoft.com/sv-se/help/305144/how-to-use-useraccountcontrol-to-manipulate-user-account-properties
-        }
 
         sucessfull = self.app.ldap.createUser('username', 'password', options)
 
