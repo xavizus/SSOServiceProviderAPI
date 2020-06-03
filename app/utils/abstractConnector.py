@@ -19,7 +19,7 @@ class abstractConnector(ABC):
         raise NotImplementedError('Subclass must override getUserGroups method')
 
     @abstractmethod
-    def createUser(self, username, password, options=None):
+    def createUser(self):
         raise NotImplementedError('Subclass must override createUser method')
 
     @abstractmethod

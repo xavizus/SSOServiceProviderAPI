@@ -47,6 +47,6 @@ class LDAPtest(unittest.TestCase):
 
     def testCreateUser(self):
 
-        sucessfull = self.app.ldap.createUser('username', 'password', options)
+        sucessfull = self.app.ldap.createUser('username', 'password', 'FirstName', 'LastName', 'Email@example.com', f'OU=Unpersonal Account,OU=AD-Users,OU=Users,OU=Xavizus,DC=xavizus,DC=com')
 
         self.assertTrue(sucessfull)

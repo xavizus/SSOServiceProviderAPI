@@ -128,33 +128,25 @@ class Flask_LDAP(abstractConnector):
         firstname,
         lastname,
         email,
-        distinguishedName=None,
+        distinguishedNameOfOU,
         description="Created by SSO"
     ):
-        if not distinguishedName:
-            pass
         options = {
             "objectClass": 'User',
-            'sn': "Surename",
-            'description': 'Created by SSO',
-            'displayName': 'Surename givenName',
-            'givenName': 'givenName',
-            'sAMAccountName': 'username',
-            'mail': 'mail',
-            'distinguishedName': 'CN=userName,OU=Unpersonal Account,OU=AD-Users,OU=Users,' + self.app.config['DOMAIN_OU'],
+            'sn': lastname,
+            'description': description,
+            'displayName': f"{lastname} {firstname}",
+            'givenName': firstname,
+            'sAMAccountName': username,
+            'mail': email,
+            'distinguishedName': f"CN={lastname} {firstname},{distinguishedNameOfOU}",
             'userAccountControl': 512  # https://support.microsoft.com/sv-se/help/305144/how-to-use-useraccountcontrol-to-manipulate-user-account-properties
         }
+
+        result, error = self._createObject(options)
+        if error:
+            return False
         connection = self.connection(auto_bind=True)
-        connection.add(options['distinguishedName'], attributes=options)
-        userResult = connection.result
-        if userResult['result'] != 0:
-            raise Exception(
-                f"Could not create user. Reason: { userResult['description'] }"
-            )
-        # Result on creation:
-        # {'result': 0, 'description': 'success', 'dn': '',
-        #  'message': '', 'referrals': None, 'type': 'addResponse'}
-        # Todo: Need to unlock theaccount, add password.
         unlockResult = connection.extend.microsoft.unlock_account(options['distinguishedName'])
         if unlockResult['result'] != 0:
             raise Exception(
@@ -168,15 +160,17 @@ class Flask_LDAP(abstractConnector):
             )
         connection.unbind()
 
-    def _createObject(self, object):
+    def _createObject(self, dObject):
+        objectCreated = True
         connection = self.connection(auto_bind=True)
-        connection.add(object['distinguishedName'], attributes=object)
+        connection.add(dObject['distinguishedName'], attributes=dObject)
 
         creationResult = connection.result
         if creationResult['result'] != 0:
-            raise Exception(
-                f"Could not create user. Reason: { creationResult['description'] }"
-            )
+            loggmessage = f"Could not create object. Reason: { creationResult['description'] }"
+            objectCreated = False
+        connection.unbind()
+        return objectCreated, loggmessage if loggmessage else None
 
     def deleteUser(self, username):
         raise NotImplementedError('Subclass must override deleteUser method')
