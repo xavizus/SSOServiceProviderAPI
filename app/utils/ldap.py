@@ -139,26 +139,29 @@ class Flask_LDAP(abstractConnector):
             'givenName': firstname,
             'sAMAccountName': username,
             'mail': email,
-            'distinguishedName': f"CN={lastname} {firstname},{distinguishedNameOfOU}",
-            'userAccountControl': 512  # https://support.microsoft.com/sv-se/help/305144/how-to-use-useraccountcontrol-to-manipulate-user-account-properties
+            'distinguishedName': f"CN={lastname} {firstname},{distinguishedNameOfOU}"
         }
 
         result, error = self._createObject(options)
         if error:
             return False
+
         connection = self.connection(auto_bind=True)
         unlockResult = connection.extend.microsoft.unlock_account(options['distinguishedName'])
-        if unlockResult['result'] != 0:
+        if unlockResult is not True:
             raise Exception(
                 f"Could not unlock user. Reason: { unlockResult['description']}"
             )
 
         passwordResult = connection.extend.microsoft.modify_password(options['distinguishedName'], new_password=password)
-        if passwordResult['result'] != 0:
+        if passwordResult is not True:
             raise Exception(
                 f"Could not reset password. Reason: { passwordResult['description']}"
             )
+
+        connection.modify(options['distinguishedName'], {'userAccountControl': ['MODIFY_REPLACE', '512']})
         connection.unbind()
+        return True
 
     def _createObject(self, dObject):
         objectCreated = True
@@ -170,10 +173,21 @@ class Flask_LDAP(abstractConnector):
             loggmessage = f"Could not create object. Reason: { creationResult['description'] }"
             objectCreated = False
         connection.unbind()
-        return objectCreated, loggmessage if loggmessage else None
+        return objectCreated, loggmessage if 'loggmessage' in locals() else None
 
-    def deleteUser(self, username):
-        raise NotImplementedError('Subclass must override deleteUser method')
+    def deleteUser(self, distinguishedNameOfOU):
+        results = self._deleteObject(distinguishedNameOfOU)
+        if results is not True:
+            raise Exception(
+                "Could not delete object!"
+            )
+        return True
+
+    def _deleteObject(self, distinguishedName):
+        connection = self.connection(auto_bind=True)
+        results = connection.delete(distinguishedName)
+
+        return results
 
     def addUserToGroups(self, username, groups):
         raise NotImplementedError(
