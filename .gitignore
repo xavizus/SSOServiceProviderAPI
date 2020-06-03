@@ -1,6 +1,7 @@
 # Config
 config.py
 xav-p-ca.cer
+.vscode/*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
