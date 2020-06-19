@@ -1,4 +1,4 @@
-from app.utils.abstractConnector import abstractConnector
+from app.utils.connectors.abstractAuthenticator import abstractAuthenticator
 from ldap3 import Server, Connection, ALL, NTLM, ALL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPUnknownAuthenticationMethodError,\
     LDAPSocketOpenError, LDAPSSLConfigurationError
@@ -6,7 +6,7 @@ from ldap3.utils import conv
 from app.utils.exceptions import FLASKLDAPMissingConfigurationError
 
 
-class Flask_LDAP(abstractConnector):
+class ldap(abstractAuthenticator):
     ldapProviderUrl = None
     ldapDomain = None
     ldapOU = None
@@ -21,7 +21,7 @@ class Flask_LDAP(abstractConnector):
         if app is not None:
             self.initApp(app)
 
-    def initApp(self, app):
+    def initApp(self, app, test=False):
         requiredConfigs = {
             'ldapProviderUrl': 'LDAP_PROVIDER_URL',
             'ldapDomain': 'DOMAIN',
@@ -69,8 +69,6 @@ class Flask_LDAP(abstractConnector):
         except LDAPSSLConfigurationError as error:
             raise Exception(error)
 
-        app.__setattr__("ldap", self)
-
     def connection(self, username=None, password=None, auto_bind=False):
         if any(element is None for element in [username, password]):
             username = self.username
@@ -113,7 +111,10 @@ class Flask_LDAP(abstractConnector):
 
         groups = []
         connection.search(
-            self.ldapOU, f'(member:1.2.840.113556.1.4.1941:={entry[0]["distinguishedName"]})',
+            self.ldapOU, (
+                f'(member:1.2.840.113556.1.4.1941:='
+                f'{entry[0]["distinguishedName"]})'
+            ),
             attributes=[ALL_ATTRIBUTES]
         )
         for entry in connection.entries:
@@ -139,7 +140,10 @@ class Flask_LDAP(abstractConnector):
             'givenName': firstname,
             'sAMAccountName': username,
             'mail': email,
-            'distinguishedName': f"CN={lastname} {firstname},{distinguishedNameOfOU}"
+            'distinguishedName': (
+                f"CN={lastname} {firstname},"
+                f"{distinguishedNameOfOU}"
+            )
         }
 
         result, error = self._createObject(options)
@@ -147,19 +151,29 @@ class Flask_LDAP(abstractConnector):
             return False
 
         connection = self.connection(auto_bind=True)
-        unlockResult = connection.extend.microsoft.unlock_account(options['distinguishedName'])
+        unlockResult = connection.extend.microsoft.\
+            unlock_account(options['distinguishedName'])
         if unlockResult is not True:
             raise Exception(
-                f"Could not unlock user. Reason: { unlockResult['description']}"
+                f"Could not unlock user.\
+                     Reason: { unlockResult['description']}"
             )
 
-        passwordResult = connection.extend.microsoft.modify_password(options['distinguishedName'], new_password=password)
+        passwordResult = connection.extend.microsoft.\
+            modify_password(
+                options['distinguishedName'],
+                new_password=password
+            )
         if passwordResult is not True:
             raise Exception(
-                f"Could not reset password. Reason: { passwordResult['description']}"
+                f"Could not reset password. Reason:\
+                     { passwordResult['description']}"
             )
 
-        connection.modify(options['distinguishedName'], {'userAccountControl': ['MODIFY_REPLACE', '512']})
+        connection.modify(
+            options['distinguishedName'],
+            {'userAccountControl': ['MODIFY_REPLACE', '512']}
+        )
         connection.unbind()
         return True
 
@@ -170,10 +184,12 @@ class Flask_LDAP(abstractConnector):
 
         creationResult = connection.result
         if creationResult['result'] != 0:
-            loggmessage = f"Could not create object. Reason: { creationResult['description'] }"
+            loggmessage = f"Could not create object.\
+                 Reason: { creationResult['description'] }"
             objectCreated = False
         connection.unbind()
-        return objectCreated, loggmessage if 'loggmessage' in locals() else None
+        return objectCreated, loggmessage if 'loggmessage' in locals() \
+            else None
 
     def deleteUser(self, distinguishedNameOfOU):
         results = self._deleteObject(distinguishedNameOfOU)
@@ -200,10 +216,16 @@ class Flask_LDAP(abstractConnector):
         )
 
     def resetPassword(self, username, password):
-        raise NotImplementedError('Subclass must override resetPassword method')
+        raise NotImplementedError(
+            'Subclass must override resetPassword method'
+        )
 
     def createGroup(self, groupName, options=None):
-        raise NotImplementedError('Subclass must override createGroup method')
+        raise NotImplementedError(
+            'Subclass must override createGroup method'
+        )
 
     def deleteGroup(self, groupName, options=None):
-        raise NotImplementedError('Subclass must override deleteGroup method')
+        raise NotImplementedError(
+            'Subclass must override deleteGroup method'
+        )

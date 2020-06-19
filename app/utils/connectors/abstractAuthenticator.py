@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class abstractConnector(ABC):
+class abstractAuthenticator(ABC):
     @abstractmethod
     def initApp(self, app):
         raise NotImplementedError('Subclass must override initApp method')
@@ -12,11 +12,13 @@ class abstractConnector(ABC):
 
     @abstractmethod
     def authenticateUser(self, username):
-        raise NotImplementedError('Subclass must override authenticateUser method')
+        raise NotImplementedError('Subclass must override\
+            authenticateUser method')
 
     @abstractmethod
     def getUserGroups(self, username):
-        raise NotImplementedError('Subclass must override getUserGroups method')
+        raise NotImplementedError('Subclass must override\
+            getUserGroups method')
 
     @abstractmethod
     def createUser(self):
@@ -36,12 +38,15 @@ class abstractConnector(ABC):
 
     @abstractmethod
     def addUserToGroups(self, username, groups):
-        raise NotImplementedError('Subclass must override addUserToGroups method')
+        raise NotImplementedError('Subclass must override\
+             addUserToGroups method')
 
     @abstractmethod
     def removeUserFromGroups(self, username, groups):
-        raise NotImplementedError('Subclass must override removeUserFromGroups method')
+        raise NotImplementedError('Subclass must override\
+             removeUserFromGroups method')
 
     @abstractmethod
     def resetPassword(self, username, password):
-        raise NotImplementedError('Subclass must override removeUserFromGroups method')
+        raise NotImplementedError('Subclass must override\
+             removeUserFromGroups method')

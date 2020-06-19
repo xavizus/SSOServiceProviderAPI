@@ -1,6 +1,6 @@
 from flask import Flask
 from config import config
-from app.utils.ldap import Flask_LDAP
+from app.utils.connectors.authenticatorFactory import authenticatorFactory
 
 
 def createApp():
@@ -9,5 +9,5 @@ def createApp():
     )
     app.config.from_object(config)
 
-    Flask_LDAP(app)
+    authenticatorFactory.initApp(app=app, authenticatorType='ldap2')
     return app
